@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
@@ -13,6 +14,8 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Microsoft.Identity.Client;
+using System.Net.Http;
+using System.IO;
 
 namespace AutoExcel
 {
@@ -25,7 +28,9 @@ namespace AutoExcel
         string _graphAPIEndpoint = "https://graph.microsoft.com/v1.0/me";
 
         //Set the scope for API call to user.read
-        string[] _scopes = new string[] { "user.read" };
+        string[] _scopes = new string[] { "user.read", "Files.ReadWrite.All" };
+
+        string _accessToken = "";
 
         public MainWindow()
         {
@@ -68,6 +73,8 @@ namespace AutoExcel
                 ResultText.Text = await GetHttpContentWithToken(_graphAPIEndpoint, authResult.AccessToken);
                 DisplayBasicTokenInfo(authResult);
                 this.SignOutButton.Visibility = Visibility.Visible;
+                this.UploadExcelButton.Visibility = Visibility.Visible;
+                _accessToken = authResult.AccessToken;
             }
         }
         /// <summary>
@@ -108,6 +115,7 @@ namespace AutoExcel
                     this.ResultText.Text = "User has signed-out";
                     this.CallGraphButton.Visibility = Visibility.Visible;
                     this.SignOutButton.Visibility = Visibility.Collapsed;
+                    this.UploadExcelButton.Visibility = Visibility.Collapsed;
                 }
                 catch (MsalException ex)
                 {
@@ -129,6 +137,32 @@ namespace AutoExcel
                 TokenInfoText.Text += $"Token Expires: {authResult.ExpiresOn.ToLocalTime()}" + Environment.NewLine;
                 TokenInfoText.Text += $"Access Token: {authResult.AccessToken}" + Environment.NewLine;
             }
+        }
+
+        private async Task<string> UploadExcelFileAsync()
+        {
+            var httpClient = new HttpClient();
+            HttpResponseMessage response;
+            try
+            {
+                var nowString = DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss");
+                var nowEncodedString = System.Uri.EscapeDataString(nowString);
+                var url = _graphAPIEndpoint + "/drive/root:/Demo/NewWorkbook" + nowEncodedString + ".xlsx:/content";
+                httpClient.DefaultRequestHeaders.Add("Authorization", "Bearer " + _accessToken);
+                var byteContent = File.ReadAllBytes(@"C:\Temp\EmptyWorkbook.xlsx");
+                response = await httpClient.PutAsync(url, new ByteArrayContent(byteContent));
+                var content = await response.Content.ReadAsStringAsync();
+                return content;
+            }
+            catch (Exception ex)
+            {
+                return ex.ToString();
+            }
+        }
+
+        private async void UploadExcelButton_Click(object sender, RoutedEventArgs e)
+        {
+            ResultText.Text = await UploadExcelFileAsync();
         }
     }
 }
